@@ -5,6 +5,9 @@ Created on Tue Jan  8 14:34:38 2019
 @author: Alexis
 """
 import numpy as np
+import random as r
+import operator
+import scipy.optimize
 class Voiture():
     def __init__(self, nom, puissance, couple, poids, acceleration, prix, pollution):
         self.nom = nom
@@ -122,4 +125,124 @@ pareto = [voitures[i] for i in range(len(voitures)) if index_pareto[i]]
 solution1 = solutiondistanceTchebychevAugmentee(pareto)
 solution2 = solutiondistanceTchebychevAugmentee(pareto, [(0, -208), (1, -320)])
 
+
+
+#### Partie 2 ###
+
+def normalize(voitures, normaliseur):
+    voitures_normal = []
+    for i in range(len(voitures)):
+        voiture = voitures[i].get_params()
+        voitures_normal.append(
+            [
+                voiture[0]/normaliseur[0], 
+                voiture[1]/normaliseur[1], 
+                voiture[2]/normaliseur[2], 
+                voiture[3]/normaliseur[3], 
+                voiture[4]/normaliseur[4], 
+                voiture[5]/normaliseur[5]
+            ]
+            
+            )
+    return voitures_normal
+
+def query(x,y,w_DM):
+    fx = [x[i] * w_DM[i] for i in range(len(x))]
+    fy = [y[i] * w_DM[i] for i in range(len(y))]
+    if (fx > fy) :
+        return (x,y)
+    else:
+        return (y,x)
+
+
+def PL_pmr(x,y,P):
+
+    c = np.zeros(6) # objective vector 
+    for i in range(6):
+        c[i] = -x[i] + y[i]
+    A_ub = np.zeros( ( len(P) , 6 ) ) # constraint array using P, i.e. answers of DM to queries
+    for i in range(len(P)):
+        for j in range(6) :
+            A_ub[i][j] = P[i][1][j] - P[i][0][j]
+    b_ub = np.zeros(len(P))
+    A_eq = np.ones((1,6))
+    b_eq = np.ones(1)
+
+    # print(A_ub)
+
+    # bounds variable bounds 
+    w0_bounds = (0,1)
+    w1_bounds = (0,1)
+    w2_bounds = (0,1)
+    w3_bounds = (0,1)
+    w4_bounds = (0,1)
+    w5_bounds = (0,1)
+
+    bounds = (w0_bounds, w1_bounds, w2_bounds, w3_bounds, w4_bounds, w5_bounds)
     
+    res = scipy.optimize.linprog(c, A_ub, b_ub, A_eq, b_eq, bounds)
+    return -res.fun
+
+def inP(x,y,P):
+    return P.count((x,y)) > 0
+
+def neq_list(l1, l2):
+    return len(l1) != len(l2) or any( l1[i] != l2[i] for i in range(len(l1)) )
+
+
+def increment(voitures, eps):
+    P = []
+    n_query = 0
+    min_pmr = float("inf")
+    x_star = None
+    y_star = None
+    y_max = None
+    while min_pmr >= eps :
+        print("--- new iteration ---")
+        for x in voitures:
+            max_pmr = -float("inf")
+            for y in voitures:
+                if (neq_list(x,y)):
+                    # print(data[voitures.index(x)][0])
+                    # print(data[voitures.index(y)][0])
+                    pmr = PL_pmr(x,y,P)
+                    if (pmr > max_pmr  ):
+                        max_pmr = pmr
+                        y_max = y
+                    elif (pmr == max_pmr and inP(x, y_max, P) ): # avoid chosing the same y* every time
+                        y_max = y
+            if (max_pmr < min_pmr):
+                min_pmr = max_pmr
+                x_star = x
+                y_star = y_max
+            elif (max_pmr == min_pmr and inP(x_star, y_star, P)):
+                x_star = x
+                y_star = y_max
+        P.append(query(x_star,y_star,DMcoeff))
+        n_query += 1
+        print(data[voitures.index(x_star)][0])
+        # print(data[voitures.index(y_star)][0])
+        # print(neq_list(x_star,y_star))
+        # print(x_star)
+        print(min_pmr)
+    print("------")
+    print(data[voitures.index(x_star)][0])
+    print('nb questions')
+    print(n_query)    
+    print("------")
+    return x_star
+        
+
+DMcoeff = [.2,.1,.1,.2,.3,.1]
+# DMcoeff = [.0,.0,.0,.0,1.0,.0]
+ideal = find_ideal(voitures)
+nadir = find_nadir(voitures)
+normaliseur = [1,1,1,1,1,1]
+for i in range(6):
+    normaliseur[i] = nadir[i] - ideal[i]
+voitures = normalize(voitures, normaliseur)
+
+increment(voitures, 0.001)
+
+
+
