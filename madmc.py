@@ -129,18 +129,19 @@ solution2 = solutiondistanceTchebychevAugmentee(pareto, [(0, -208), (1, -320)])
 
 #### Partie 2 ###
 
-def normalize(voitures, normaliseur):
+def normalize(voitures, nadir, ideal):
     voitures_normal = []
+    normaliseur = [nadir[i] - ideal[i] for i in range(6)]
     for i in range(len(voitures)):
         voiture = voitures[i].get_params()
         voitures_normal.append(
             [
-                voiture[0]/normaliseur[0], 
-                voiture[1]/normaliseur[1], 
-                voiture[2]/normaliseur[2], 
-                voiture[3]/normaliseur[3], 
-                voiture[4]/normaliseur[4], 
-                voiture[5]/normaliseur[5]
+                (voiture[0] - ideal[0] )/normaliseur[0], 
+                (voiture[1] - ideal[1] )/normaliseur[1], 
+                (voiture[2] - ideal[2] )/normaliseur[2], 
+                (voiture[3] - ideal[3] )/normaliseur[3], 
+                (voiture[4] - ideal[4] )/normaliseur[4], 
+                (voiture[5] - ideal[5] )/normaliseur[5]
             ]
             
             )
@@ -221,6 +222,7 @@ def increment(voitures, eps):
         P.append(query(x_star,y_star,DMcoeff))
         n_query += 1
         print(data[voitures.index(x_star)][0])
+        print(x_star)
         # print(data[voitures.index(y_star)][0])
         # print(neq_list(x_star,y_star))
         # print(x_star)
@@ -231,16 +233,31 @@ def increment(voitures, eps):
     print(n_query)    
     print("------")
     return x_star
-        
+
+def ideal(voitures):
+    ideal = [float("inf"),float("inf"),float("inf"),float("inf"),float("inf"),float("inf")]
+    for i in range(len(voitures)):
+        for j in range(6):
+            if (voitures[i].get_params()[j] < ideal[j]):
+                ideal[j] = voitures[i].get_params()[j]
+    return ideal
+
+def nadir(pareto):
+    nadir = [-float("inf"),-float("inf"),-float("inf"),-float("inf"),-float("inf"),-float("inf")]
+    for i in range(len(pareto)):
+        for j in range(6):
+            if (pareto[i].get_params()[j] > nadir[j]):
+                nadir[j] = pareto[i].get_params()[j]
+    return nadir
 
 DMcoeff = [.2,.1,.1,.2,.3,.1]
-# DMcoeff = [.0,.0,.0,.0,1.0,.0]
-ideal = find_ideal(voitures)
-nadir = find_nadir(voitures)
-normaliseur = [1,1,1,1,1,1]
-for i in range(6):
-    normaliseur[i] = nadir[i] - ideal[i]
-voitures = normalize(voitures, normaliseur)
+# DMcoeff = [.75,.05,.05,.05,.05,.05]
+pareto = [ voitures[i] for i in range(len(voitures)) if index_pareto[i]]
+ideal = ideal(voitures)
+nadir = nadir(voitures)
+print(nadir)
+print(ideal)
+voitures = normalize(voitures, nadir, ideal)
 
 increment(voitures, 0.001)
 
