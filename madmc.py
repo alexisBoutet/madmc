@@ -8,6 +8,7 @@ import numpy as np
 import random as r
 import operator
 import scipy.optimize
+import madmcAlexis as aux
 class Voiture():
     def __init__(self, nom, puissance, couple, poids, acceleration, prix, pollution):
         self.nom = nom
@@ -116,7 +117,14 @@ data = [["alpha romeo mito veloce", -170, -250, 1145, 73, 25890, 124],
         ["seat ibiza cupra 192 ch", -192, -320, 1269, 67, 22870, 139],
         ["suzuki swift sport", -136, -160, 1040, 87, 25680, 147],
         ["volkswagen polo bluegt", -150, -250, 1212, 79, 23620, 110],
-        ["volkswagen polo gti", -192, -320, 1269, 67, 26900, 139]]
+        ["volkswagen polo gti", -192, -320, 1269, 67, 26900, 139],
+        ["ALFA ROMEO Giulietta Veloce", -240, -340, 1320, 60, 35.600, 162],
+        ["AUDI S3", -310, -380, 1425, 52, 50000, 162],
+        ["AUDI RS3", -367, -465, 1425, 43, 57900, 189],
+        ["BMW M140i", -340, -500, 1450, 48, 45600, 179],
+        ["FORD Focus ST", -250, -360, 1362, 65, 29200, 159],
+        ["FORD Focus RS 350", -350, -440, 1524, 47, 39600, 175],
+        ]
 
 voitures = import_data(data)
 index_pareto = pareto(voitures)
@@ -160,9 +168,9 @@ def PL_pmr(x,y,P):
 
     c = np.zeros(6) # objective vector 
     for i in range(6):
-        c[i] = -x[i] + y[i]
+        c[i] = - x[i] + y[i]
     A_ub = np.zeros( ( len(P) , 6 ) ) # constraint array using P, i.e. answers of DM to queries
-    for i in range(len(P)):
+    for i in range(len(P)) :
         for j in range(6) :
             A_ub[i][j] = P[i][1][j] - P[i][0][j]
     b_ub = np.zeros(len(P))
@@ -191,48 +199,61 @@ def neq_list(l1, l2):
     return len(l1) != len(l2) or any( l1[i] != l2[i] for i in range(len(l1)) )
 
 
-def increment(voitures, eps):
+def increment(voitures, eps, DMcoeff):
+    # print(DMcoeff)
     P = []
     n_query = 0
+    rank = 0
     min_pmr = float("inf")
+    old_x_star_i = -1
     x_star = None
     y_star = None
+    argmin = []
+    argmax_tab = []
     y_max = None
     while min_pmr >= eps :
-        print("--- new iteration ---")
+        # print("--- new iteration ---")
         for x in voitures:
+            argmax = []
             max_pmr = -float("inf")
             for y in voitures:
                 if (neq_list(x,y)):
-                    # print(data[voitures.index(x)][0])
-                    # print(data[voitures.index(y)][0])
                     pmr = PL_pmr(x,y,P)
-                    if (pmr > max_pmr  ):
+                    if (pmr > max_pmr):
                         max_pmr = pmr
-                        y_max = y
-                    elif (pmr == max_pmr and inP(x, y_max, P) ): # avoid chosing the same y* every time
-                        y_max = y
+                        # y_max = y
+                        argmax = [y]
+                    elif (pmr == max_pmr and not inP(x, y, P) ): # avoid chosing the same y* every time
+                    #     y_max = y
+                        argmax.append(y)
             if (max_pmr < min_pmr):
                 min_pmr = max_pmr
-                x_star = x
-                y_star = y_max
-            elif (max_pmr == min_pmr and inP(x_star, y_star, P)):
-                x_star = x
-                y_star = y_max
+                # x_star = x
+                # y_star = y_max
+                argmin = [x]
+                argmax_tab = [argmax]
+            elif (max_pmr == min_pmr and len(argmax) > 0 ):
+            #     x_star = x
+            #     y_star = y_max
+                argmin.append(x)
+                argmax_tab.append(argmax)
+        x_star_i = r.randint(0, len(argmin)-1)
+        if (old_x_star_i != x_star_i):
+            rank = n_query
+        x_star = argmin[x_star_i]
+        argmax = argmax_tab[x_star_i]
+        y_star = argmax[r.randint(0, len(argmax)-1)]
         P.append(query(x_star,y_star,DMcoeff))
         n_query += 1
-        print(data[voitures.index(x_star)][0])
-        print(x_star)
-        # print(data[voitures.index(y_star)][0])
-        # print(neq_list(x_star,y_star))
-        # print(x_star)
-        print(min_pmr)
-    print("------")
-    print(data[voitures.index(x_star)][0])
-    print('nb questions')
-    print(n_query)    
-    print("------")
-    return x_star
+        # print(aux.data[voitures.index(x_star)][0])
+    #     print(min_pmr)
+    # print("------")
+    # print(aux.data[voitures.index(x_star)][0])
+    # print('nb questions')
+    # print(n_query)    
+    # print(P)
+    # print("------")
+    return (n_query,rank,voitures.index(x_star))
 
 def ideal(voitures):
     ideal = [float("inf"),float("inf"),float("inf"),float("inf"),float("inf"),float("inf")]
@@ -250,16 +271,46 @@ def nadir(pareto):
                 nadir[j] = pareto[i].get_params()[j]
     return nadir
 
-DMcoeff = [.2,.1,.1,.2,.3,.1]
-# DMcoeff = [.75,.05,.05,.05,.05,.05]
-pareto = [ voitures[i] for i in range(len(voitures)) if index_pareto[i]]
-ideal = ideal(voitures)
-nadir = nadir(voitures)
-print(nadir)
-print(ideal)
-voitures = normalize(voitures, nadir, ideal)
+def randomDM():
+    vect = [ r.random() for i in range(6) ]
+    s = sum(vect)
+    return [ vi / s for vi in vect ]
 
-increment(voitures, 0.001)
+# # DMcoeff = [.2,.1,.1,.2,.3,.1]
+# # DMcoeff = [.0,.0,.5,.25,.0,.25]
+# DMcoeff = randomDM()
+# # pareto = [ voitures[i] for i in range(len(voitures)) if index_pareto[i]]
+# voitures = import_data(aux.data)
+# ideal = ideal(voitures)
+# nadir = nadir(voitures)
+# print(nadir)
+# print(ideal)
+# voitures = normalize(voitures, nadir, ideal)
+
+# increment(voitures, 0.001)
 
 
+def run():
+    DMcoeff = randomDM()
+    voitures = import_data(aux.data)
+    ideal_list = ideal(voitures)
+    nadir_list = nadir(voitures)
+    voitures = normalize(voitures, nadir_list, ideal_list)
 
+    return increment(voitures, 0.001,DMcoeff)
+
+def runs(n):
+    results = []
+    ranks = []
+    indexes = []
+    for i in range(n):
+        res = run()
+        print(res)
+        results.append(res[0])
+        ranks.append(res[1])
+        indexes.append(res[2])
+    print(results)
+    print(ranks)
+    print(indexes)
+
+runs(10)
